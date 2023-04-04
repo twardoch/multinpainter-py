@@ -7,11 +7,12 @@ from pathlib import Path
 from collections import OrderedDict
 from typing import Optional, Union, Tuple
 
+import httpx
 import numpy as np
 import openai
 import requests
 from PIL import Image
-from progress.bar import Bar
+from tqdm import tqdm
 
 from multinpainter import __version__
 
@@ -37,7 +38,7 @@ def read_prompt(png_path: Union[str, Path]) -> Optional[str]:
 
 class Multinpainter_OpenAI:
     """
-    A class for iterative inpainting using OpenAI's Dall-E 2 and GPT-3 atificial intelligence models to extend (outpaint) an existing image to new defined dimensions. 
+    A class for iterative inpainting using OpenAI's Dall-E 2 and GPT-3 atificial intelligence models to extend (outpaint) an existing image to new defined dimensions.
 
     Args:
         image_path (str): Path to the input image file.
@@ -102,7 +103,7 @@ class Multinpainter_OpenAI:
         tick_progress(): Updates progress bar to indicate completion of one iteration of inpainting process.
         iterative_inpainting(): Performs iterative inpainting process by calling inpaint_square() method on each square in planned square list.
         inpaint(): Main entry point for Multinpainter_OpenAI class. Initializes inpainting
-    
+
     Usage:
         from multinpainter import Multinpainter_OpenAI
         inpainter = Multinpainter_OpenAI(
@@ -120,6 +121,7 @@ class Multinpainter_OpenAI:
         inpainter.inpaint()
         print(inpainter.out_path)
     """
+
     def __init__(
         self,
         image_path: Union[str, Path],
@@ -202,7 +204,7 @@ class Multinpainter_OpenAI:
         log_level = logging.DEBUG if self.verbose else logging.WARNING
         logging.basicConfig(level=log_level, format="%(levelname)s: %(message)s")
 
-    def timestamp() -> str:
+    def timestamp(self) -> str:
         """
         Returns the current timestamp in the format 'YYYYMMDD-HHMMSS'.
 
@@ -244,7 +246,7 @@ class Multinpainter_OpenAI:
     def to_rgba(self, image: Image) -> Image:
         """
         Converts the given image to RGBA format and returns the converted image.
-        
+
         Args:
             image (Image): The input image to be converted.
 
@@ -257,7 +259,7 @@ class Multinpainter_OpenAI:
     def to_png(self, image: Image) -> bytes:
         """
         Converts the given image to PNG format and returns the PNG data as bytes.
-        
+
         Args:
             image (Image): The input image to be converted.
 
@@ -332,7 +334,7 @@ class Multinpainter_OpenAI:
                 )
             )
         logging.info(f"Detected humans: {boxes}")
-        return boxes
+        return sorted(boxes, key=lambda box: box[0])
 
     def detect_faces(self):
         """
@@ -392,7 +394,7 @@ class Multinpainter_OpenAI:
         """
         self.out_image.paste(self.image, (self.expansion[0], self.expansion[2]))
 
-    def openai_inpaint(self, png: bytes, prompt: str) -> Image:
+    async def openai_inpaint(self, png: bytes, prompt: str) -> Image:
         """
         Generates an inpainted image square using the OpenAI API.
 
@@ -404,7 +406,7 @@ class Multinpainter_OpenAI:
             PIL.Image.Image: The inpainted image square returned by the OpenAI API.
         """
 
-        response = openai.Image.create_edit(
+        response = await openai.Image.acreate_edit(
             image=png,
             mask=png,
             prompt=prompt,
@@ -412,7 +414,9 @@ class Multinpainter_OpenAI:
             size=f"{self.square}x{self.square}",
         )
         image_url = response["data"][0]["url"]
-        return Image.open(io.BytesIO(requests.get(image_url).content))
+        async with httpx.AsyncClient() as client:
+            response = await client.get(image_url)
+        return Image.open(io.BytesIO(response.content))
 
     def get_initial_square_position(self):
         """
@@ -443,7 +447,7 @@ class Multinpainter_OpenAI:
                 return True
         return False
 
-    def inpaint_square(self, square_delta: Tuple[int, int]) -> None:
+    async def inpaint_square(self, square_delta: Tuple[int, int]) -> None:
         """
         Inpaints the square region in the output image specified by square_delta using OpenAI's API.
         Chooses the appropriate prompt based on the presence of humans in the square.
@@ -473,7 +477,7 @@ class Multinpainter_OpenAI:
             prompt = self.prompt_fallback
 
         logging.info(f"Inpainting region {x} {y} {x1} {y1} with: {prompt}")
-        inpainted_square = self.openai_inpaint(png, prompt)
+        inpainted_square = await self.openai_inpaint(png, prompt)
         self.out_image.paste(inpainted_square, (x, y))
         self.snapshot()
 
@@ -573,46 +577,26 @@ class Multinpainter_OpenAI:
                 return x, None
             return x, next_y
 
-    def init_progress(self, value: int):
-        """
-        Initializes a progress bar for the iterative inpainting process.
-
-        Args:
-        - value: An integer representing the total number of iterations that the progress bar will track.
-        """
-
-        self.progress = Bar("Outpainting square", max=value)
-
-    def tick_progress(self):
-        """
-        Advances the progress bar by one tick.
-        """
-        if self.verbose:
-            print()
-        self.progress.next()
-        if self.verbose:
-            print()
-
-    def iterative_inpainting(self):
+    async def iterative_inpainting(self):
         """
         Iteratively performs the inpainting process by calling `inpaint_square` on each square in the order defined by `create_planned_squares`.
         Initializes and updates a progress bar to track the progress of the inpainting process.
         """
 
-        inpainting_plan = []
-        for direction in self.planned_squares:
-            inpainting_plan += self.planned_squares[direction]
-        self.init_progress(len(inpainting_plan))
+        inpainting_plan = (
+            square_delta
+            for direction in self.planned_squares
+            for square_delta in self.planned_squares[direction]
+        )
+        progress_bar = tqdm(inpainting_plan, desc="Outpainting square", unit="square")
+        for square_delta in progress_bar:
+            await self.inpaint_square(square_delta)
 
-        for square_delta in inpainting_plan:
-            self.tick_progress()
-            self.inpaint_square(square_delta)
-
-    def inpaint(self):
+    async def inpaint(self):
         """
         - Perform outpainting for each square in the outpainting plan.
         - Save the output image.
         """
 
-        self.iterative_inpainting()
+        await self.iterative_inpainting()
         self.save_image()
