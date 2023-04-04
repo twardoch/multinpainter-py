@@ -109,6 +109,11 @@ The `inpaint()` method of the class does the following:
 - Perform outpainting for each square in the outpainting plan.
 - Save the output image.
 
+## Authors & License
+
+- Copyright (c) 2023 Adam Twardoch, licensed under [Apache 2.0](./LICENSE.txt).
+- Written with significant assistance from ChatGPT-4.
+
 ## Note
 
 This project has been set up using PyScaffold 4.4. For details and usage
