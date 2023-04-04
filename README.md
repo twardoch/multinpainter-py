@@ -18,7 +18,7 @@ python3 -m pip install --upgrade git+https://github.com/twardoch/multinpainter-p
 
 ## Usage
 
-Command-line:
+### Command-line
 
 ```
 NAME
@@ -90,6 +90,8 @@ See below for explanation of the arguments.
 
 You can also use `python3 -m multinpainter` instead of `multinpainter-py`. 
 
+### Python
+
 In Python, you can also do: 
 
 ```python
@@ -111,6 +113,25 @@ inpainter.inpaint()
 print(inpainter.out_path)
 ```
 
+When you initialize an instance of the `Multinpainter_OpenAI` class, it will: 
+
+- Set up logging configurations.
+- Open the input image and create an output image.
+- Optionally detect humans in the input image using the YOLO model.
+- Optionally detect faces in the input image using the Dlib library.
+- Find the center of focus of the image (center of input image or the face if found).
+- Calculate the expansion of the output image.
+- Paste the input image onto the output image.
+- Create the outpainting plan by generating a list of square regions in different directions.
+
+When you call the `inpaint()` method, it will:
+
+- Perform outpainting for each square in the outpainting plan.
+- Save the output image.
+- Return the output image path.
+
+### Arguments
+
 Here’s an explanation of the arguments: 
 
 | CLI               | Python       | Explanation                                                                                                      |
@@ -127,19 +148,7 @@ Here’s an explanation of the arguments:
 | `--verbose`       | `verbose`    | If given, prints verbose output and saves intermediate outpainting images.                                       |
 | `-a API_KEY`      | `api_key`    | The API key for OpenAI. If not provided, the code will attempt to get it from the `OPENAI_API_KEY` env variable. |
 
-The `inpaint()` method of the class does the following:
-
-- Initialize the class with the required input parameters.
-- Set up logging configurations.
-- Open the input image and create an output image.
-- Optionally detect humans in the input image using the YOLO model.
-- Optionally detect faces in the input image using the Dlib library.
-- Find the center of focus of the image (center of input image or the face if found).
-- Calculate the expansion of the output image.
-- Paste the input image onto the output image.
-- Create the outpainting plan by generating a list of square regions in different directions.
-- Perform outpainting for each square in the outpainting plan.
-- Save the output image.
+See docstrings inside the code for more detailed info.
 
 ## Authors & License
 
