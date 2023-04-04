@@ -20,7 +20,7 @@ __license__ = "Apache-2.0"
 def read_prompt(png_path):
     with open(f"{Path(png_path).stem}.json") as f:
         prompt = json.load(f)["prompt"]
-    print(f"""read_prompt: {prompt}""")
+    logging.info(f"""read_prompt: {prompt}""")
     return prompt
 
 class Multinpainter_OpenAI:

@@ -2,7 +2,7 @@
 
 import fire
 from multinpainter import __version__
-from .multinpainter import Multinpainter_OpenAI
+from .multinpainter import Multinpainter_OpenAI, read_prompt
 
 def inpaint(
     image,
@@ -36,7 +36,10 @@ def inpaint(
     inpainter.inpaint()
     return inpainter.out_path
 
-
-if __name__ == "__main__":
+def cli():
     fire.core.Display = lambda lines, out: print(*lines, file=out)
     fire.Fire(inpaint, name="multinpainter-py")
+    
+if __name__ == "__main__":
+    cli()
+    
