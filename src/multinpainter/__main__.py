@@ -11,7 +11,7 @@ def inpaint(
     height,
     prompt=None,
     fallback=None,
-    step=512,
+    step=None,
     square=1024,
     humans=False,
     verbose=False,

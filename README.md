@@ -69,8 +69,8 @@ inpainter = Multinpainter_OpenAI(
     out_height=1080,
     prompt="Asian woman in front of blue wall",
     fallback="Solid blue wall",
-    step=256,
     square=1024,
+    step=256,
     humans=True,
     verbose=True,
     api_key="sk-NNNNNNNNNNN",
@@ -81,18 +81,18 @@ print(inpainter.out_path)
 
 Here’s an explanation of the arguments: 
 
-| CLI               | Python        | Explanation                                                                                                        |
-| ----------------- | ------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `IMAGE`           | `image_path` | The path of the input image to be outpainted.                                                                      |
-| `OUTPUT`          | `out_path`   | The path where the output image will be saved.                                                                     |
-| `WIDTH`           | `out_width`  | The desired width of the output image.                                                                             |
-| `HEIGHT`          | `out_height` | The desired height of the output image.                                                                            |
-| `-p PROMPT`       | `prompt`      | The main prompt that will guide the outpainting process.                                                           |
-| `-f FALLBACK`     | `fallback`    | A fallback prompt used for outpainting when no humans are detected in the image.                                   |
-| `--step=STEP`     | `step`        | The step size used to move the outpainting square during the iterative outpainting process.                        |
-| `--square=SQUARE` | `square`      | The size of the square region that will be outpainted during each step , must be `1024` or `512` or `256`.         |
-| `--humans`        | `humans`      | A boolean flag indicating whether to detect humans in the image and adapt the prompt accordingly.                  |
-| `--verbose`       | `verbose`     | If given, prints verbose output and saves intermediate outpainting images.                                         |
+| CLI               | Python       | Explanation                                                                                                      |
+| ----------------- | ------------ | ---------------------------------------------------------------------------------------------------------------- |
+| `IMAGE`           | `image_path` | The path of the input image to be outpainted.                                                                    |
+| `OUTPUT`          | `out_path`   | The path where the output image will be saved.                                                                   |
+| `WIDTH`           | `out_width`  | The desired width of the output image.                                                                           |
+| `HEIGHT`          | `out_height` | The desired height of the output image.                                                                          |
+| `-p PROMPT`       | `prompt`     | The main prompt that will guide the outpainting process.                                                         |
+| `-f FALLBACK`     | `fallback`   | A fallback prompt used for outpainting when no humans are detected in the image.                                 |
+| `--square=SQUARE` | `square`     | The size of the square region that will be outpainted during each step , must be `1024` or `512` or `256`.       |
+| `--step=STEP`     | `step`       | The step size used to move the outpainting square, half of square by default.                                    |
+| `--humans`        | `humans`     | A boolean flag indicating whether to detect humans in the image and adapt the prompt accordingly.                |
+| `--verbose`       | `verbose`    | If given, prints verbose output and saves intermediate outpainting images.                                       |
 | `-a API_KEY`      | `api_key`    | The API key for OpenAI. If not provided, the code will attempt to get it from the `OPENAI_API_KEY` env variable. |
 
 The `inpaint()` method of the class does the following:

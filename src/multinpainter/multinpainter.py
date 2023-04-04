@@ -5,11 +5,13 @@ import logging
 from datetime import datetime
 from pathlib import Path
 from collections import OrderedDict
+from typing import Optional, Union
 
 import numpy as np
 import openai
 import requests
 from PIL import Image
+from progress.bar import Bar
 
 from multinpainter import __version__
 
@@ -17,26 +19,28 @@ __author__ = "Adam Twardoch"
 __license__ = "Apache-2.0"
 
 
-def read_prompt(png_path):
+
+def read_prompt(png_path: Union[str, Path]) -> Optional[str]:
     with open(f"{Path(png_path).stem}.json") as f:
         prompt = json.load(f)["prompt"]
     logging.info(f"""read_prompt: {prompt}""")
     return prompt
 
+
 class Multinpainter_OpenAI:
     def __init__(
         self,
-        image_path,
-        out_path,
-        out_width,
-        out_height,
-        prompt,
-        fallback=None,
-        step=512,
-        square=1024,
-        humans=True,
-        verbose=False,
-        api_key=None,
+        image_path: Union[str, Path],
+        out_path: Union[str, Path],
+        out_width: int,
+        out_height: int,
+        prompt: str,
+        fallback: Optional[str] = None,
+        step: Optional[int] = None,
+        square: int = 1024,
+        humans: bool = True,
+        verbose: bool = False,
+        api_key: Optional[str] = None,
     ):
         self.verbose = verbose
         self.configure_logging()
@@ -54,10 +58,12 @@ class Multinpainter_OpenAI:
         self.out_width = out_width
         self.out_height = out_height
         logging.info(f"Output size: {self.out_width}x{self.out_height}")
-        self.step = step
-        logging.info(f"Step size: {self.step}")
         self.square = square
         logging.info(f"Square size: {self.square}")
+        if not step:
+            step = int(square / 2)
+        self.step = step
+        logging.info(f"Step size: {self.step}")
         self.out_image = self.create_out_image()
         self.center_of_focus = None
         self.prompt = prompt
@@ -76,6 +82,7 @@ class Multinpainter_OpenAI:
             self.make_prompt_fallback()
         self.paste_input_image()
         self.planned_squares = self.create_planned_squares()
+        self.progress = None
 
     def configure_logging(self):
         log_level = logging.DEBUG if self.verbose else logging.WARNING
@@ -105,10 +112,10 @@ class Multinpainter_OpenAI:
         self.out_image.save(self.out_path.with_suffix(".png"), format="PNG")
         logging.info(f"Output image saved to: {self.out_path}")
 
-    def to_rgba(self, image):
+    def to_rgba(self, image: Image) -> Image:
         return image.convert("RGBA")
 
-    def to_png(self, image):
+    def to_png(self, image: Image) -> bytes:
         png = io.BytesIO()
         image.save(png, format="PNG")
         return png.getvalue()
@@ -197,7 +204,7 @@ class Multinpainter_OpenAI:
     def paste_input_image(self):
         self.out_image.paste(self.image, (self.expansion[0], self.expansion[2]))
 
-    def openai_inpaint(self, png, prompt):
+    def openai_inpaint(self, png: str, prompt: str) -> Image:
         response = openai.Image.create_edit(
             image=png,
             mask=png,
@@ -213,8 +220,8 @@ class Multinpainter_OpenAI:
         y_init = max(0, self.expansion[2] - (self.square - self.input_height) // 2)
         return x_init, y_init
 
-    def human_in_square(self, square_coords):
-        x0, y0, x1, y1 = square_coords
+    def human_in_square(self, square_box: Tuple[int, int, int, int]) -> bool:
+        x0, y0, x1, y1 = square_box
 
         for box in self.human_boxes:
             bx0, by0, bx1, by1 = box
@@ -222,8 +229,8 @@ class Multinpainter_OpenAI:
                 return True
         return False
 
-    def inpaint_square(self, square_coords):
-        x, y = square_coords
+    def inpaint_square(self, square_delta: Tuple[int, int]) -> None:
+        x, y = square_delta
         x1, y1 = x + self.square, y + self.square
         # Check if the square is fully enclosed inside the pasted input image
         if (
@@ -283,8 +290,8 @@ class Multinpainter_OpenAI:
         logging.info(f"Planned squares: {planned_squares}")
         return planned_squares
 
-    def move_square(self, square_coords, direction):
-        x, y = square_coords
+    def move_square(self, square_delta: Tuple[int, int], direction: str) -> Tuple[int, int]:
+        x, y = square_delta
 
         if direction == "up":
             next_y = max(0, y - self.step)
@@ -307,15 +314,25 @@ class Multinpainter_OpenAI:
                 return x, None
             return x, next_y
 
+    def init_progress(self, value: int):
+        self.progress = Bar("Outpainting square", max=value)
+    def tick_progress(self):
+        if self.verbose:
+            print()
+        self.progress.next()
+        if self.verbose:
+            print()
+
     def iterative_inpainting(self):
         inpainting_plan = []
         for direction in self.planned_squares:
             inpainting_plan += self.planned_squares[direction]
+        self.init_progress(len(inpainting_plan))
 
-        for square_coords in inpainting_plan:
-            self.inpaint_square(square_coords)
+        for square_delta in inpainting_plan:
+            self.tick_progress()
+            self.inpaint_square(square_delta)
 
     def inpaint(self):
         self.iterative_inpainting()
         self.save_image()
-
