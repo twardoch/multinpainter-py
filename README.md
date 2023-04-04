@@ -8,6 +8,8 @@ Multinpainter is a Python library and a CLI tool that can iteratively outpaint a
 
 You can specify an input image, the size of the output image, and a prompt. Multinpainter will then iteratively call the OpenAI API to outpaint the image step-by-step until the entire output image is filled with content. 
 
+You need an [OpenAI API key](https://platform.openai.com/account/api-keys). The tool performs a call to the GPT 3.5 API and then multiple calls to the Dall-E 2 API. 
+
 ## Installation
 
 ```
