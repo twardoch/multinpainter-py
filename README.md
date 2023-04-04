@@ -27,36 +27,68 @@ NAME
 SYNOPSIS
     multinpainter-py IMAGE OUTPUT WIDTH HEIGHT <flags>
 
+DESCRIPTION
+    Perform iterative inpainting on an image file using OpenAI's DALL-E 2 model.
+
 POSITIONAL ARGUMENTS
     IMAGE
+        Type: str
+        Path to the input image file.
     OUTPUT
+        Type: str
+        Path to the output image file.
     WIDTH
+        Type: int
+        Width of the output image in pixels.
     HEIGHT
+        Type: int
+        Height of the output image in pixels.
 
 FLAGS
     -p, --prompt=PROMPT
-        Type: Optional[]
+        Type: Optional[str]
         Default: None
+        A prompt to guide the image generation.
     -f, --fallback=FALLBACK
-        Type: Optional[]
+        Type: Optional[str]
         Default: None
+        A fallback prompt to use if no human is found in the image. 
+        If not provided but `humans` is specified, the tool will 
+        autogenerate the fallback prompt based on the main prompt.
     --step=STEP
-        Default: 512
-    --square=SQUARE
-        Default: 1024
-    -h, --humans=HUMANS
-        Default: False
-    -v, --verbose=VERBOSE
-        Default: False
-    -a, --api_key=API_KEY
-        Type: Optional[]
+        Type: Optional[int]
         Default: None
+        The step size in pixels to move the window during the 
+        inpainting process. If not provided, the window will 
+        move by half the square size. Defaults to None.
+    --square=SQUARE
+        Type: int
+        Default: 1024
+        The size of the square window to use for inpainting. 
+        Must be 1024 (default) or 512 or 256.
+    -h, --humans=HUMANS
+        Type: bool
+        Default: False
+        If specified, the algorithm will detect humans and apply 
+        the main prompt for squares with a human, and the fallback 
+        prompt for squares without a human.
+    -v, --verbose=VERBOSE
+        Type: bool
+        Default: False
+        If specified, prints verbose info.
+    -a, --api_key=API_KEY
+        Type: Optional[str]
+        Default: None
+        Your OpenAI API key. If not provided, the API key will 
+        be read from the OPENAI_API_KEY environment variable.
 
 NOTES
     You can also use flags syntax for POSITIONAL ARGUMENTS
 ```
 
-See below for explanation of the arguments. You can also use `python3 -m multinpainter` instead of `multinpainter-py`. 
+See below for explanation of the arguments. 
+
+You can also use `python3 -m multinpainter` instead of `multinpainter-py`. 
 
 In Python, you can also do: 
 
