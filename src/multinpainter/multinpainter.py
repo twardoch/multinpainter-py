@@ -5,9 +5,11 @@ import logging
 from datetime import datetime
 from pathlib import Path
 from collections import OrderedDict
-from typing import Optional, Union, Tuple
+from typing import Optional, Union, Tuple, Dict, List, Any
+import base64
 
 import httpx
+import aiohttp
 import numpy as np
 import openai
 import requests
@@ -20,22 +22,6 @@ __author__ = "Adam Twardoch"
 __license__ = "Apache-2.0"
 
 
-def read_prompt(png_path: Union[str, Path]) -> Optional[str]:
-    """
-    Reads the prompt from the corresponding JSON file of the input image.
-
-    Args:
-        png_path (Union[str, Path]): The path of the input image file in PNG format.
-
-    Returns:
-        Optional[str]: The prompt text if the JSON file is found and contains a valid prompt, otherwise None.
-    """
-    with open(f"{Path(png_path).stem}.json") as f:
-        prompt = json.load(f)["prompt"]
-    logging.info(f"""read_prompt: {prompt}""")
-    return prompt
-
-
 class Multinpainter_OpenAI:
     """
     A class for iterative inpainting using OpenAI's Dall-E 2 and GPT-3 atificial intelligence models to extend (outpaint) an existing image to new defined dimensions.
@@ -45,16 +31,18 @@ class Multinpainter_OpenAI:
         out_path (str): Path to save the output image file.
         out_width (int): Desired width of the output image.
         out_height (int): Desired height of the output image.
-        prompt (str): Prompt for the GPT-3 model to generate image content.
-        fallback (Optional[str]): Fallback prompt to use when the original prompt contains
+        prompt (str, optional): Prompt for the GPT-3 model to generate image content.
+        fallback (str, optional): Fallback prompt to use when the original prompt contains
             human-related items. Defaults to None.
-        step (Optional[int]): The number of pixels to shift the square in each direction
+        step (int, optional): The number of pixels to shift the square in each direction
             during the iterative inpainting process. Defaults to None.
-        square (int): Size of the square region to inpaint in pixels. Defaults to 1024.
-        humans (bool): Whether to include human-related items in the prompt.
+        square (int, optional): Size of the square region to inpaint in pixels. Defaults to 1024.
+        humans (bool, optional): Whether to include human-related items in the prompt.
             Defaults to True.
-        verbose (bool): Whether to enable verbose logging. Defaults to False.
-        api_key (Optional[str]): OpenAI API key. Defaults to None.
+        verbose (bool, optional): Whether to enable verbose logging. Defaults to False.
+        openai_api_key (str, optional): OpenAI API key or OPENAI_API_KEY env variable.
+        hf_api_key (str, optional): Huggingface API key or HUGGINGFACEHUB_API_TOKEN env variable.
+        prompt_model (str, optional): The Huggingface model to describe image. Defaults to "Salesforce/blip2-opt-2.7b".
 
     A class for iterative inpainting using OpenAI's Dall-E 2 and GPT-3 models to generate image content from an input image and prompt.
 
@@ -64,12 +52,14 @@ class Multinpainter_OpenAI:
         out_width (int): Desired width of output image.
         out_height (int): Desired height of output image.
         prompt (str): Prompt for GPT-3 model to generate image content.
-        fallback (Optional[str]): Fallback prompt to use when the original prompt contains human-related items. Defaults to None.
-        step (Optional[int]): The number of pixels to shift the square in each direction during the iterative inpainting process. Defaults to None.
+        fallback (str): Fallback prompt to use when the original prompt contains human-related items. Defaults to None.
+        step (int): The number of pixels to shift the square in each direction during the iterative inpainting process. Defaults to None.
         square (int): Size of the square region to inpaint in pixels. Defaults to 1024.
         humans (bool): Whether to include human-related items in the prompt. Defaults to True.
         verbose (bool): Whether to enable verbose logging. Defaults to False.
-        api_key (Optional[str]): OpenAI API key. Defaults to None.
+        openai_api_key (str): OpenAI API key or OPENAI_API_KEY env variable.
+        hf_api_key (str): Huggingface API key or HUGGINGFACEHUB_API_TOKEN env variable.
+        prompt_model (str): Huggingface model to describe image. Defaults to "Salesforce/blip2-opt-2.7b".
         input_width (int): Width of input image.
         input_height (int): Height of input image.
         image (PIL.Image.Image): Input image as a PIL.Image object.
@@ -88,6 +78,7 @@ class Multinpainter_OpenAI:
         to_png(image): Converts input image to PNG format and returns binary data.
         make_prompt_fallback(): Generates fallback prompt if given prompt contains human-related items.
         create_out_image(): Creates new RGBA image of size out_width x out_height with transparent background and returns.
+        describe_image(): Generates prompt using a Huggingface image captioning model.
         detect_humans(): Detects humans in input image using YOLOv5 model from ultralytics package.
         detect_faces(): Detects a face in input image using dlib face detector.
         find_center_of_focus(): Finds center of focus for output image.
@@ -99,12 +90,11 @@ class Multinpainter_OpenAI:
         inpaint_square(square_delta): Inpaints given square based on square_delta.
         create_planned_squares(): Generates list of squares to be inpainted in a specific order.
         move_square(square_delta, direction): Moves given square in specified direction by step size.
-        init_progress(value): Initializes progress bar with given value.
-        tick_progress(): Updates progress bar to indicate completion of one iteration of inpainting process.
         iterative_inpainting(): Performs iterative inpainting process by calling inpaint_square() method on each square in planned square list.
-        inpaint(): Main entry point for Multinpainter_OpenAI class. Initializes inpainting
+        inpaint(): Asynchronous main entry point for Multinpainter_OpenAI class.
 
     Usage:
+        import asyncio
         from multinpainter import Multinpainter_OpenAI
         inpainter = Multinpainter_OpenAI(
             image_path="input_image.png",
@@ -116,10 +106,12 @@ class Multinpainter_OpenAI:
             square=1024,
             step=256,
             humans=True,
-            verbose=True
+            verbose=True,
+            openai_api_key="sk-NNNNNN",
+            hf_api_key="hf_NNNNNN",
+            prompt_model="Salesforce/blip2-opt-2.7b"
         )
-        inpainter.inpaint()
-        print(inpainter.out_path)
+        asyncio.run(inpainter.inpaint())
     """
 
     def __init__(
@@ -128,13 +120,15 @@ class Multinpainter_OpenAI:
         out_path: Union[str, Path],
         out_width: int,
         out_height: int,
-        prompt: str,
+        prompt: Optional[str] = None,
         fallback: Optional[str] = None,
         step: Optional[int] = None,
         square: int = 1024,
         humans: bool = True,
         verbose: bool = False,
-        api_key: Optional[str] = None,
+        openai_api_key: Optional[str] = None,
+        hf_api_key: Optional[str] = None,
+        prompt_model: str = None,
     ):
         """
         - Initialize the Multinpainter_OpenAI instance with the required input parameters.
@@ -152,22 +146,25 @@ class Multinpainter_OpenAI:
             out_path (Union[str, Path]): The path for the output inpainted image file.
             out_width (int): The width of the output image.
             out_height (int): The height of the output image.
-            prompt (str): The prompt text to be used in the inpainting process.
-            fallback (Optional[str], optional): The fallback prompt text, used when inpainting non-human areas. Defaults to None.
-            step (Optional[int], optional): The step size to move the inpainting square. Defaults to None.
+            prompt (str, optional): The prompt text to be used in the inpainting process.
+            fallback (str, optional): The fallback prompt text, used when inpainting non-human areas. Defaults to None.
+            step (int, optional): The step size to move the inpainting square. Defaults to None.
             square (int, optional): The size of the inpainting square. Defaults to 1024.
             humans (bool, optional): Whether to consider humans in the inpainting process. Defaults to True.
             verbose (bool, optional): Whether to show verbose logging. Defaults to False.
-            api_key (Optional[str], optional): The OpenAI API key. Defaults to None.
+            openai_api_key (str, optional): Your OpenAI API key, defaults to the OPENAI_API_KEY environment variable.
+            hf_api_key (str, optional): Your Huggingface API key, defaults to the HUGGINGFACEHUB_API_TOKEN env variable.
+            prompt_model (str, optional): The Huggingface model to describe image. Defaults to "Salesforce/blip2-opt-2.7b".
         """
         self.verbose = verbose
         self.configure_logging()
         logging.info("Starting iterative OpenAI inpainter...")
-        openai.api_key = api_key or os.environ.get("OPENAI_API_KEY", None)
-        if not openai.api_key:
+        openai.openai_api_key = openai_api_key or os.environ.get("OPENAI_API_KEY", None)
+        if not openai.openai_api_key:
             logging.error(
                 "OpenAI API key is missing: must be parameter or 'OPENAI_API_KEY' env variable."
             )
+        self.hf_api_key = hf_api_key or os.environ.get("HUGGINGFACEHUB_API_TOKEN", None)
         self.image_path = Path(image_path)
         logging.info(f"Image path: {self.image_path}")
         self.out_path = Path(out_path)
@@ -182,11 +179,6 @@ class Multinpainter_OpenAI:
         logging.info(f"Step size: {self.step}")
         self.out_image = self.create_out_image()
         self.center_of_focus = None
-        self.prompt = prompt
-        self.prompt_human = prompt
-        self.fallback = fallback
-        self.prompt_fallback = self.fallback if fallback else self.prompt
-        logging.info(f"Human prompt: {self.prompt_human}")
         self.humans = humans
         self.find_center_of_focus()
         self.expansion = self.calculate_expansion()
@@ -196,6 +188,9 @@ class Multinpainter_OpenAI:
         self.paste_input_image()
         self.planned_squares = self.create_planned_squares()
         self.progress = None
+        self.prompt = prompt
+        self.fallback = fallback
+        self.prompt_model = prompt_model or "Salesforce/blip2-opt-2.7b" # "Salesforce/blip2-opt-6.7b-coco" # 
 
     def configure_logging(self) -> None:
         """
@@ -233,6 +228,7 @@ class Multinpainter_OpenAI:
         Opens the input image from the specified image path, converts it to RGBA format, and stores the image and its dimensions as instance variables.
         """
         self.image = self.to_rgba(Image.open(self.image_path))
+        self.image_png = self.to_png(self.image)
         self.input_width, self.input_height = self.image.size
         logging.info(f"Input size: {self.input_width}x{self.input_height}")
 
@@ -304,6 +300,39 @@ class Multinpainter_OpenAI:
         The resulting image is stored in the instance variable `out_image`.
         """
         return Image.new("RGBA", (self.out_width, self.out_height), (0, 0, 0, 0))
+
+    async def describe_image(self):
+        async def post(
+            api_url: str, image: bytes, headers: Dict, wait_for_model: bool = True
+        ) -> Any:
+            async with aiohttp.ClientSession() as session:
+                payload: Dict[str, str] = {
+                    "inputs": {"image": base64.b64encode(image).decode("utf-8")},
+                    "options": {"wait_for_model": wait_for_model},
+                }
+
+                async with session.post(
+                    api_url, headers=headers, json=payload # data=image # 
+                ) as response:
+                    # If we get a bad response
+                    if not response.ok:
+                        logging.error(response)
+                        logging.info(headers)
+
+                    # Get the response from the API call
+                    inference = await response.json()
+
+            return inference
+
+        logging.info(
+            f"Waking up the Huggingface {self.prompt_model} model to describe image (may be slow)..."
+        )
+        headers = {"Authorization": f"Bearer {self.hf_api_key}"}
+        api_url = f"https://api-inference.huggingface.co/models/{self.prompt_model}"
+        inference = await post(
+            api_url, self.image_png, headers=headers
+        )
+        return inference[0].get("generated_text", "").strip()
 
     def detect_humans(self):
         """
@@ -582,21 +611,28 @@ class Multinpainter_OpenAI:
         Iteratively performs the inpainting process by calling `inpaint_square` on each square in the order defined by `create_planned_squares`.
         Initializes and updates a progress bar to track the progress of the inpainting process.
         """
+        if not self.prompt:
+            self.prompt = await self.describe_image()
+        self.prompt_human = self.prompt
+        logging.info(f"Homan prompt: {self.prompt_human}")
+        self.prompt_fallback = self.fallback or self.prompt
+        logging.info(f"Fallback prompt: {self.prompt_fallback}")
 
-        inpainting_plan = (
+        inpainting_plan = [
             square_delta
             for direction in self.planned_squares
             for square_delta in self.planned_squares[direction]
+        ]
+        progress_bar = tqdm(
+            inpainting_plan, desc="Outpainting square", total=len(inpainting_plan)
         )
-        progress_bar = tqdm(inpainting_plan, desc="Outpainting square", unit="square")
         for square_delta in progress_bar:
             await self.inpaint_square(square_delta)
 
     async def inpaint(self):
         """
-        - Perform outpainting for each square in the outpainting plan.
+        - Asynchronously perform outpainting for each square in the outpainting plan.
         - Save the output image.
         """
-
         await self.iterative_inpainting()
         self.save_image()

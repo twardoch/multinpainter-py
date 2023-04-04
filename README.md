@@ -6,9 +6,11 @@ Iterative image outpainting powered by OpenAI Dall-E API.
 
 Multinpainter is a Python library and a CLI tool that can iteratively outpaint an input image using OpenAI’s API. 
 
-You can specify an input image, the size of the output image, and a prompt. Multinpainter will then iteratively call the OpenAI API to outpaint the image step-by-step until the entire output image is filled with content. 
+You can specify an input image, the size of the output image, and optionally a prompt. Multinpainter will then iteratively call the OpenAI API to outpaint the image step-by-step until the entire output image is filled with content. 
 
 You need an [OpenAI API key](https://platform.openai.com/account/api-keys). The tool performs a call to the GPT 3.5 API and then multiple calls to the Dall-E 2 API. 
+
+If you don’t provide a prompt, Multinpainter will try to generate a prompt using the [`Salesforce/blip2-opt-2.7b`](https://huggingface.co/Salesforce/blip2-opt-2.7b) model on Huggingface. For that, you also need a [Huggingface access token](https://huggingface.co/settings/tokens). 
 
 ## Installation
 
@@ -76,11 +78,19 @@ FLAGS
         Type: bool
         Default: False
         If specified, prints verbose info.
-    -a, --api_key=API_KEY
+    -a, --openai_api_key=API_KEY
         Type: Optional[str]
         Default: None
         Your OpenAI API key. If not provided, the API key will 
         be read from the OPENAI_API_KEY environment variable.
+    --hf_api_key=HF_API_KEY
+        Type: Optional[Str]
+        Default: None
+        The Huggingface API key. Defaults to None.
+    --prompt_model=PROMPT_MODEL
+        Type: Optional[str]
+        Default: None
+        The Huggingface model to describe image.
 
 NOTES
     You can also use flags syntax for POSITIONAL ARGUMENTS
@@ -95,6 +105,7 @@ You can also use `python3 -m multinpainter` instead of `multinpainter-py`.
 In Python, you can also do: 
 
 ```python
+import asyncio
 from multinpainter import Multinpainter_OpenAI
 inpainter = Multinpainter_OpenAI(
     image_path="input_image.png",
@@ -107,10 +118,11 @@ inpainter = Multinpainter_OpenAI(
     step=256,
     humans=True,
     verbose=True,
-    api_key="sk-NNNNNNNNNNN",
+    openai_api_key="sk-NNNNNN",
+    hf_api_key="hf_NNNNNN",
+    prompt_model="Salesforce/blip2-opt-2.7b"
 )
-inpainter.inpaint()
-print(inpainter.out_path)
+asyncio.run(inpainter.inpaint())
 ```
 
 When you initialize an instance of the `Multinpainter_OpenAI` class, it will: 
@@ -124,8 +136,9 @@ When you initialize an instance of the `Multinpainter_OpenAI` class, it will:
 - Paste the input image onto the output image.
 - Create the outpainting plan by generating a list of square regions in different directions.
 
-When you call the `inpaint()` method, it will:
+You then call the `inpaint()` **async** method, which will:
 
+- Optionally infer the prompt from the image.
 - Perform outpainting for each square in the outpainting plan.
 - Save the output image.
 - Return the output image path.
@@ -134,19 +147,21 @@ When you call the `inpaint()` method, it will:
 
 Here’s an explanation of the arguments: 
 
-| CLI               | Python       | Explanation                                                                                                      |
-| ----------------- | ------------ | ---------------------------------------------------------------------------------------------------------------- |
-| `IMAGE`           | `image_path` | The path of the input image to be outpainted.                                                                    |
-| `OUTPUT`          | `out_path`   | The path where the output image will be saved.                                                                   |
-| `WIDTH`           | `out_width`  | The desired width of the output image.                                                                           |
-| `HEIGHT`          | `out_height` | The desired height of the output image.                                                                          |
-| `-p PROMPT`       | `prompt`     | The main prompt that will guide the outpainting process.                                                         |
-| `-f FALLBACK`     | `fallback`   | A fallback prompt used for outpainting when no humans are detected in the image.                                 |
-| `--square=SQUARE` | `square`     | The size of the square region that will be outpainted during each step , must be `1024` or `512` or `256`.       |
-| `--step=STEP`     | `step`       | The step size used to move the outpainting square, half of square by default.                                    |
-| `--humans`        | `humans`     | A boolean flag indicating whether to detect humans in the image and adapt the prompt accordingly.                |
-| `--verbose`       | `verbose`    | If given, prints verbose output and saves intermediate outpainting images.                                       |
-| `-a API_KEY`      | `api_key`    | The API key for OpenAI. If not provided, the code will attempt to get it from the `OPENAI_API_KEY` env variable. |
+| CLI                           | Python           | Explanation                                                                                                |
+| ----------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------- |
+| `IMAGE`                       | `image_path`     | The path of the input image to be outpainted.                                                              |
+| `OUTPUT`                      | `out_path`       | The path where the output image will be saved.                                                             |
+| `WIDTH`                       | `out_width`      | The desired width of the output image.                                                                     |
+| `HEIGHT`                      | `out_height`     | The desired height of the output image.                                                                    |
+| `-p PROMPT`                   | `prompt`         | The main prompt that will guide the outpainting process.                                                   |
+| `-f FALLBACK`                 | `fallback`       | A fallback prompt used for outpainting when no humans are detected in the image.                           |
+| `--square=SQUARE`             | `square`         | The size of the square region that will be outpainted during each step , must be `1024` or `512` or `256`. |
+| `--step=STEP`                 | `step`           | The step size used to move the outpainting square, half of square by default.                              |
+| `--humans`                    | `humans`         | A boolean flag indicating whether to detect humans in the image and adapt the prompt accordingly.          |
+| `--verbose`                   | `verbose`        | If given, prints verbose output and saves intermediate outpainting images.                                 |
+| `-a API_KEY`                  | `openai_api_key` | OpenAI API key or OPENAI_API_KEY env variable.                                                             |
+| `--hf_api_key=HF_API_KEY`     | `hf_api_key`     | Huggingface API key or `HUGGINGFACEHUB_API_TOKEN` env variable.                                            |
+| `--prompt_model=PROMPT_MODEL` | `prompt_model`   | The Huggingface model to describe image. Defaults to `Salesforce/blip2-opt-2.7b`.                          |
 
 See docstrings inside the code for more detailed info.
 
