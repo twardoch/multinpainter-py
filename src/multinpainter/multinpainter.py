@@ -22,9 +22,10 @@ from .utils import image_to_png
 __author__ = "Adam Twardoch"
 __license__ = "Apache-2.0"
 
+DESCRPTION_MODEL="Salesforce/blip2-opt-2.7b"
 
 class Multinpainter_OpenAI:
-    """
+    f"""
     A class for iterative inpainting using OpenAI's Dall-E 2 and GPT-3 atificial intelligence models to extend (outpaint) an existing image to new defined dimensions.
 
     Args:
@@ -43,7 +44,7 @@ class Multinpainter_OpenAI:
         verbose (bool, optional): Whether to enable verbose logging. Defaults to False.
         openai_api_key (str, optional): OpenAI API key or OPENAI_API_KEY env variable.
         hf_api_key (str, optional): Huggingface API key or HUGGINGFACEHUB_API_TOKEN env variable.
-        prompt_model (str, optional): The Huggingface model to describe image. Defaults to "Salesforce/blip2-opt-2.7b".
+        prompt_model (str, optional): The Huggingface model to describe image. Defaults to "{DESCRPTION_MODEL}".
 
     A class for iterative inpainting using OpenAI's Dall-E 2 and GPT-3 models to generate image content from an input image and prompt.
 
@@ -60,7 +61,7 @@ class Multinpainter_OpenAI:
         verbose (bool): Whether to enable verbose logging. Defaults to False.
         openai_api_key (str): OpenAI API key or OPENAI_API_KEY env variable.
         hf_api_key (str): Huggingface API key or HUGGINGFACEHUB_API_TOKEN env variable.
-        prompt_model (str): Huggingface model to describe image. Defaults to "Salesforce/blip2-opt-2.7b".
+        prompt_model (str): Huggingface model to describe image. Defaults to "{DESCRPTION_MODEL}".
         input_width (int): Width of input image.
         input_height (int): Height of input image.
         image (PIL.Image.Image): Input image as a PIL.Image object.
@@ -110,7 +111,7 @@ class Multinpainter_OpenAI:
             verbose=True,
             openai_api_key="sk-NNNNNN",
             hf_api_key="hf_NNNNNN",
-            prompt_model="Salesforce/blip2-opt-2.7b"
+            prompt_model="{DESCRPTION_MODEL}"
         )
         asyncio.run(inpainter.inpaint())
     """
@@ -118,9 +119,9 @@ class Multinpainter_OpenAI:
     def __init__(
         self,
         image_path: Union[str, Path],
-        out_path: Union[str, Path],
-        out_width: int,
-        out_height: int,
+        out_path: Union[str, Path] = None,
+        out_width: int = 0,
+        out_height: int = 0,
         prompt: Optional[str] = None,
         fallback: Optional[str] = None,
         step: Optional[int] = None,
@@ -131,7 +132,7 @@ class Multinpainter_OpenAI:
         hf_api_key: Optional[str] = None,
         prompt_model: str = None,
     ):
-        """
+        f"""
         - Initialize the Multinpainter_OpenAI instance with the required input parameters.
         - Set up logging configurations.
         - Open the input image and create an output image.
@@ -155,26 +156,29 @@ class Multinpainter_OpenAI:
             verbose (bool, optional): Whether to show verbose logging. Defaults to False.
             openai_api_key (str, optional): Your OpenAI API key, defaults to the OPENAI_API_KEY environment variable.
             hf_api_key (str, optional): Your Huggingface API key, defaults to the HUGGINGFACEHUB_API_TOKEN env variable.
-            prompt_model (str, optional): The Huggingface model to describe image. Defaults to "Salesforce/blip2-opt-2.7b".
+            prompt_model (str, optional): The Huggingface model to describe image. Defaults to "{DESCRPTION_MODEL}".
         """
         self.verbose = verbose
         self.configure_logging()
         logging.info("Starting iterative OpenAI inpainter...")
         self.openai_api_key = openai_api_key or os.environ.get("OPENAI_API_KEY", None)
-        if not self.openai_api_key:
-            logging.error(
-                "OpenAI API key is missing: must be parameter or 'OPENAI_API_KEY' env variable."
-            )
         openai.openai_api_key = self.openai_api_key
         self.hf_api_key = hf_api_key or os.environ.get("HUGGINGFACEHUB_API_TOKEN", None)
         self.image_path = Path(image_path)
-        logging.info(f"Image path: {self.image_path}")
-        self.out_path = Path(out_path)
-        logging.info(f"Output path: {self.out_path}")
+        logging.info(f"Image path: {self.image_path}")        
         self.open_image()
         self.out_width = out_width
         self.out_height = out_height
+        if not out_path:
+            out_path = self.image_path.with_name(f"{self.image_path.stem}_outpainted-{self.out_width}x{self.out_height}.png")
+        self.out_path = Path(out_path)
+        logging.info(f"Output path: {self.out_path}")
         logging.info(f"Output size: {self.out_width}x{self.out_height}")
+        self.prompt = prompt
+        self.fallback = fallback
+        self.prompt_model = prompt_model or DESCRPTION_MODEL # "Salesforce/blip2-opt-6.7b-coco" # 
+
+    def prep_inpainting(self):
         self.square = square
         logging.info(f"Square size: {self.square}")
         self.step = step or square // 2
@@ -191,10 +195,6 @@ class Multinpainter_OpenAI:
             self.make_prompt_fallback()
         self.paste_input_image()
         self.planned_squares = self.create_planned_squares()
-        self.progress = None
-        self.prompt = prompt
-        self.fallback = fallback
-        self.prompt_model = prompt_model or "Salesforce/blip2-opt-2.7b" # "Salesforce/blip2-opt-6.7b-coco" # 
 
     def configure_logging(self) -> None:
         """
@@ -293,10 +293,11 @@ class Multinpainter_OpenAI:
 
     async def describe_image(self, func_describe=None, *args, **kwargs):
         if func_describe is None:
-            from .models import describe_image_huggingface
-            func_describe = describe_image_huggingface
+            from .models import describe_image_hf
+            func_describe = describe_image_hf
 
-        self.prompt = await func_describe(self.image, self.hf_api_key, self.prompt_model, *args, **kwargs)
+        logging.info("Describing image...")
+        self.prompt = await func_describe(self.image, self.prompt_model, self.hf_api_key, *args, **kwargs)
 
 
     def detect_humans(self, func_detect=None, *args, **kwargs):
@@ -555,5 +556,6 @@ class Multinpainter_OpenAI:
         - Asynchronously perform outpainting for each square in the outpainting plan.
         - Save the output image.
         """
+        self.prep_inpainting()
         await self.iterative_inpainting()
         self.save_image()

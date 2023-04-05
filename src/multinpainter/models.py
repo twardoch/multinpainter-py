@@ -1,5 +1,6 @@
 import base64
 import io
+import re
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import aiohttp
 import httpx
@@ -18,7 +19,9 @@ async def describe_image_hf(
     api_url = f"https://api-inference.huggingface.co/models/{prompt_model}"
     png = image_to_png(image)
 
-    async def post(api_url: str, image: bytes, headers: Dict, wait_for_model: bool = True) -> Any:
+    async def post(
+        api_url: str, image: bytes, headers: Dict, wait_for_model: bool = True
+    ) -> Any:
         async with aiohttp.ClientSession() as session:
             payload: Dict[str, str] = {
                 "inputs": {"image": base64.b64encode(image).decode("utf-8")},
@@ -32,7 +35,9 @@ async def describe_image_hf(
         return inference
 
     inference = await post(api_url, png, headers=headers)
-    return inference[0].get("generated_text", "").strip()
+    pattern = re.compile(r'^Level \d+: ')
+    description = inference[0].get("generated_text", "").strip()
+    return re.sub(pattern, '', description)
 
 # 2. detect_humans
 def detect_humans_yolo(image: Image.Image) -> List[Tuple[int, int, int, int]]:
@@ -46,9 +51,12 @@ def detect_humans_yolo(image: Image.Image) -> List[Tuple[int, int, int, int]]:
 
     for box_obj in detection:
         box = box_obj.boxes.xyxy.tolist()[0]
-        boxes.append((int(box[0] - 0.5), int(box[1] - 0.5), int(box[2] + 0.5), int(box[3] + 0.5)))
+        boxes.append(
+            (int(box[0] - 0.5), int(box[1] - 0.5), int(box[2] + 0.5), int(box[3] + 0.5))
+        )
 
     return sorted(boxes, key=lambda box: box[0])
+
 
 # 3. detect_faces
 def detect_faces_dlib(image: Image.Image) -> Optional[Any]:
@@ -57,6 +65,7 @@ def detect_faces_dlib(image: Image.Image) -> Optional[Any]:
     face_detector = dlib.get_frontal_face_detector()
     faces = face_detector(np.array(image.convert("RGB")), 1)
     return faces[0] if faces and len(faces) else None
+
 
 # 4. inpaint_square
 async def inpaint_square_openai(
@@ -69,7 +78,11 @@ async def inpaint_square_openai(
     png = image_to_png(image)
 
     response = await openai.Image.acreate_edit(
-        image=png, mask=png, prompt=prompt, n=1, size=f"{square_size[0]}x{square_size[1]}"
+        image=png,
+        mask=png,
+        prompt=prompt,
+        n=1,
+        size=f"{square_size[0]}x{square_size[1]}",
     )
     image_url = response["data"][0]["url"]
 
@@ -77,5 +90,3 @@ async def inpaint_square_openai(
         response = await client.get(image_url)
 
     return Image.open(io.BytesIO(response.content))
-
-

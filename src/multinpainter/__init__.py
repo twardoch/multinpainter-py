@@ -15,6 +15,6 @@ except PackageNotFoundError:  # pragma: no cover
 finally:
     del version, PackageNotFoundError
 
-from .multinpainter import Multinpainter_OpenAI
+from .multinpainter import Multinpainter_OpenAI, DESCRPTION_MODEL
 
-__all__ = ["Multinpainter_OpenAI"]
+__all__ = ["Multinpainter_OpenAI", "DESCRPTION_MODEL"]

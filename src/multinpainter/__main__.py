@@ -6,6 +6,11 @@ from multinpainter import __version__
 from .multinpainter import Multinpainter_OpenAI
 from typing import Optional
 
+
+def get_inpainter(*args, **kwargs) -> Multinpainter_OpenAI:
+    return Multinpainter_OpenAI(*args, **kwargs)
+
+
 def inpaint(
     image: str,
     output: str,
@@ -20,6 +25,7 @@ def inpaint(
     openai_api_key: Optional[str] = None,
     hf_api_key: Optional[str] = None,
     prompt_model: str = None,
+    *args, **kwargs,
 ) -> str:
     """
     Perform iterative inpainting on an image file using OpenAI's DALL-E 2 model.
@@ -42,7 +48,7 @@ def inpaint(
         str: The path to the output image file.
     """
 
-    inpainter = Multinpainter_OpenAI(
+    inpainter = get_inpainter(
         image_path=image,
         out_path=output,
         out_width=width,
@@ -61,9 +67,39 @@ def inpaint(
     return inpainter.out_path
 
 
+def describe(
+    image: str,
+    hf_api_key: Optional[str] = None,
+    prompt_model: str = None,
+    *args, **kwargs,
+) -> str:
+    """
+    Describe the image.
+
+    Args:
+        image (str): Path to the input image file.
+        hf_api_key (str, optional): Your Huggingface API key, defaults to the HUGGINGFACEHUB_API_TOKEN env variable.
+        prompt_model (str, optional): The Huggingface model to describe image. Defaults to "Salesforce/blip2-opt-2.7b".
+    Returns:
+        str: The path to the output image file.
+    """
+
+    inpainter = get_inpainter(
+        image_path=image,
+        hf_api_key=hf_api_key,
+        prompt_model=prompt_model,
+    )
+    asyncio.run(inpainter.describe_image())
+    return inpainter.prompt
+
+
 def cli():
     fire.core.Display = lambda lines, out: print(*lines, file=out)
-    fire.Fire(inpaint,
+    fire.Fire(
+        {
+            "inpaint": inpaint,
+            "describe": describe,
+        },
         name="multinpainter-py",
     )
 
