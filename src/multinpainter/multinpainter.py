@@ -177,16 +177,16 @@ class Multinpainter_OpenAI:
         self.prompt = prompt
         self.fallback = fallback
         self.prompt_model = prompt_model or DESCRPTION_MODEL # "Salesforce/blip2-opt-6.7b-coco" # 
-
-    def prep_inpainting(self):
         self.square = square
-        logging.info(f"Square size: {self.square}")
         self.step = step or square // 2
-        logging.info(f"Step size: {self.step}")
-        self.out_image = self.create_out_image()
         self.center_of_focus = None
         self.humans = humans
         self.face_boxes = None
+
+    def prep_inpainting(self):
+        logging.info(f"Square size: {self.square}")
+        logging.info(f"Step size: {self.step}")
+        self.out_image = self.create_out_image()
         self.detect_faces()
         self.find_center_of_focus()
         self.expansion = self.calculate_expansion()
