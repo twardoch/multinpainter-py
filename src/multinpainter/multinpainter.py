@@ -17,6 +17,7 @@ from PIL import Image
 from tqdm import tqdm
 
 from multinpainter import __version__
+from .utils import image_to_png
 
 __author__ = "Adam Twardoch"
 __license__ = "Apache-2.0"
@@ -159,11 +160,12 @@ class Multinpainter_OpenAI:
         self.verbose = verbose
         self.configure_logging()
         logging.info("Starting iterative OpenAI inpainter...")
-        openai.openai_api_key = openai_api_key or os.environ.get("OPENAI_API_KEY", None)
-        if not openai.openai_api_key:
+        self.openai_api_key = openai_api_key or os.environ.get("OPENAI_API_KEY", None)
+        if not self.openai_api_key:
             logging.error(
                 "OpenAI API key is missing: must be parameter or 'OPENAI_API_KEY' env variable."
             )
+        openai.openai_api_key = self.openai_api_key
         self.hf_api_key = hf_api_key or os.environ.get("HUGGINGFACEHUB_API_TOKEN", None)
         self.image_path = Path(image_path)
         logging.info(f"Image path: {self.image_path}")
@@ -180,6 +182,8 @@ class Multinpainter_OpenAI:
         self.out_image = self.create_out_image()
         self.center_of_focus = None
         self.humans = humans
+        self.face_boxes = None
+        self.detect_faces()
         self.find_center_of_focus()
         self.expansion = self.calculate_expansion()
         self.human_boxes = self.detect_humans() if self.humans else []
@@ -228,7 +232,6 @@ class Multinpainter_OpenAI:
         Opens the input image from the specified image path, converts it to RGBA format, and stores the image and its dimensions as instance variables.
         """
         self.image = self.to_rgba(Image.open(self.image_path))
-        self.image_png = self.to_png(self.image)
         self.input_width, self.input_height = self.image.size
         logging.info(f"Input size: {self.input_width}x{self.input_height}")
 
@@ -252,19 +255,6 @@ class Multinpainter_OpenAI:
 
         return image.convert("RGBA")
 
-    def to_png(self, image: Image) -> bytes:
-        """
-        Converts the given image to PNG format and returns the PNG data as bytes.
-
-        Args:
-            image (Image): The input image to be converted.
-
-        Returns:
-            bytes: The PNG data of the converted image.
-        """
-        png = io.BytesIO()
-        image.save(png, format="PNG")
-        return png.getvalue()
 
     def make_prompt_fallback(self):
         """
@@ -301,40 +291,15 @@ class Multinpainter_OpenAI:
         """
         return Image.new("RGBA", (self.out_width, self.out_height), (0, 0, 0, 0))
 
-    async def describe_image(self):
-        async def post(
-            api_url: str, image: bytes, headers: Dict, wait_for_model: bool = True
-        ) -> Any:
-            async with aiohttp.ClientSession() as session:
-                payload: Dict[str, str] = {
-                    "inputs": {"image": base64.b64encode(image).decode("utf-8")},
-                    "options": {"wait_for_model": wait_for_model},
-                }
+    async def describe_image(self, func_describe=None, *args, **kwargs):
+        if func_describe is None:
+            from .models import describe_image_huggingface
+            func_describe = describe_image_huggingface
 
-                async with session.post(
-                    api_url, headers=headers, json=payload # data=image # 
-                ) as response:
-                    # If we get a bad response
-                    if not response.ok:
-                        logging.error(response)
-                        logging.info(headers)
+        self.prompt = await func_describe(self.image, self.hf_api_key, self.prompt_model, *args, **kwargs)
 
-                    # Get the response from the API call
-                    inference = await response.json()
 
-            return inference
-
-        logging.info(
-            f"Waking up the Huggingface {self.prompt_model} model to describe image (may be slow)..."
-        )
-        headers = {"Authorization": f"Bearer {self.hf_api_key}"}
-        api_url = f"https://api-inference.huggingface.co/models/{self.prompt_model}"
-        inference = await post(
-            api_url, self.image_png, headers=headers
-        )
-        return inference[0].get("generated_text", "").strip()
-
-    def detect_humans(self):
+    def detect_humans(self, func_detect=None, *args, **kwargs):
         """
         Detects human faces or bodies in the input image using a pre-trained model.
         The method processes the instance variable `image` and returns a list of detected human bounding boxes.
@@ -343,29 +308,15 @@ class Multinpainter_OpenAI:
         Returns:
             list: A list of detected human bounding boxes in the input image.
         """
-        from ultralytics import YOLO
+        if func_detect is None:
+            from .models import detect_humans_yolov8
+            func_detect = detect_humans_yolov8
 
-        boxes = []
-        model = YOLO("yolov8n.pt")
-        model.classes = [
-            0
-        ]  # only considering class 'person' and not the 79 other classes...
-        model.conf = 0.6  # only considering detection above the threshold.
-        detection = model.predict(self.image)
-        for box_obj in detection:
-            box = box_obj.boxes.xyxy.tolist()[0]
-            boxes.append(
-                (
-                    int(box[0] - 0.5) + self.expansion[0],
-                    int(box[1] - 0.5) + self.expansion[1],
-                    int(box[2] + 0.5) + self.expansion[0],
-                    int(box[3] + 0.5) + self.expansion[1],
-                )
-            )
-        logging.info(f"Detected humans: {boxes}")
-        return sorted(boxes, key=lambda box: box[0])
+        self.human_boxes = func_detect(self.image, *args, **kwargs)
+        logging.info(f"Detected humans: {self.human_boxes}")
 
-    def detect_faces(self):
+
+    def detect_faces(self, func_detect=None, *args, **kwargs):
         """
         Detects human faces in the input image using a pre-trained model.
         The method processes the instance variable `image` and returns a list of detected face bounding boxes.
@@ -374,12 +325,13 @@ class Multinpainter_OpenAI:
         Returns:
             list: A list of detected face bounding boxes in the input image.
         """
-        import dlib
+        if func_detect is None:
+            from .models import detect_faces_dlib
+            func_detect = detect_faces_dlib
 
-        face_detector = dlib.get_frontal_face_detector()
-        logging.info("Detecting faces...")
-        faces = face_detector(np.array(self.image.convert("RGB")), 1)
-        return faces[0] if faces and len(faces) else None
+        self.face_boxes = func_detect(self.image, *args, **kwargs)
+        logging.info(f"Detected faces: {self.face_boxes}")
+
 
     def find_center_of_focus(self):
         """
@@ -390,19 +342,14 @@ class Multinpainter_OpenAI:
         Returns:
             tuple: A tuple (x, y) representing the coordinates of the calculated center of focus in the input image.
         """
-        face = self.detect_faces() if self.humans else None
-        if face:
-            logging.info(f"Found face: {face}")
-            x_center = (face.left() + face.right()) // 2
-            y_center = (face.top() + face.bottom()) // 2
+        if self.face_boxes:
+            x_min, y_min, x_max, y_max = self.face_boxes[0]
+            center_x = (x_min + x_max) // 2
+            center_y = (y_min + y_max) // 2
+            self.center_of_focus = center_x, center_y
         else:
-            x_center = self.input_width // 2
-            y_center = self.input_height // 2
-
-        self.center_of_focus = (x_center, y_center)
-        logging.info(
-            f"Center of focus: {self.center_of_focus[0]}x{self.center_of_focus[1]}"
-        )
+            self.center_of_focus = self.image.size[0] // 2, self.image.size[1] // 2
+        logging.info(f"Center of focus: {self.center_of_focus}")
 
     def calculate_expansion(self):
         x_percentage = self.center_of_focus[0] / self.input_width
@@ -422,30 +369,6 @@ class Multinpainter_OpenAI:
         the expansion values to position the input image correctly within the output image canvas.
         """
         self.out_image.paste(self.image, (self.expansion[0], self.expansion[2]))
-
-    async def openai_inpaint(self, png: bytes, prompt: str) -> Image:
-        """
-        Generates an inpainted image square using the OpenAI API.
-
-        Args:
-            png (bytes): The image data in PNG format, containing the region to be inpainted.
-            prompt (str): The text prompt to guide the OpenAI API in inpainting the image.
-
-        Returns:
-            PIL.Image.Image: The inpainted image square returned by the OpenAI API.
-        """
-
-        response = await openai.Image.acreate_edit(
-            image=png,
-            mask=png,
-            prompt=prompt,
-            n=1,
-            size=f"{self.square}x{self.square}",
-        )
-        image_url = response["data"][0]["url"]
-        async with httpx.AsyncClient() as client:
-            response = await client.get(image_url)
-        return Image.open(io.BytesIO(response.content))
 
     def get_initial_square_position(self):
         """
@@ -476,7 +399,7 @@ class Multinpainter_OpenAI:
                 return True
         return False
 
-    async def inpaint_square(self, square_delta: Tuple[int, int]) -> None:
+    async def inpaint_square(self, square_delta: Tuple[int, int], func_inpaint=None, *args, **kwargs) -> None:
         """
         Inpaints the square region in the output image specified by square_delta using OpenAI's API.
         Chooses the appropriate prompt based on the presence of humans in the square.
@@ -487,18 +410,16 @@ class Multinpainter_OpenAI:
         Returns:
             None
         """
+        if func_inpaint is None:
+            from .models import inpaint_square_openai
+            func_inpaint = inpaint_square_openai
+
         x, y = square_delta
         x1, y1 = x + self.square, y + self.square
-        # Check if the square is fully enclosed inside the pasted input image
-        if (
-            x >= self.expansion[0]
-            and y >= self.expansion[2]
-            and x1 <= (self.expansion[0] + self.input_width)
-            and y1 <= (self.expansion[2] + self.input_height)
-        ):
+        if x >= self.expansion[0] and y >= self.expansion[2] and x1 <= self.expansion[0] + self.input_width and y1 <= self.expansion[2] + self.input_height:
             return
+
         square = self.out_image.crop((x, y, x1, y1))
-        png = self.to_png(square)
 
         if self.human_in_square((x, y, x1, y1)):
             prompt = self.prompt_human
@@ -506,7 +427,7 @@ class Multinpainter_OpenAI:
             prompt = self.prompt_fallback
 
         logging.info(f"Inpainting region {x} {y} {x1} {y1} with: {prompt}")
-        inpainted_square = await self.openai_inpaint(png, prompt)
+        inpainted_square = await func_inpaint(square, prompt, (self.square, self.square), self.openai_api_key, *args, **kwargs)
         self.out_image.paste(inpainted_square, (x, y))
         self.snapshot()
 
