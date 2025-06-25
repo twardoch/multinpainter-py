@@ -1,29 +1,32 @@
 import base64
 import io
 import re
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any
+
 import aiohttp
 import httpx
 import numpy as np
 import openai
 from PIL import Image
+
 from .utils import image_to_png
+
 
 # 1. describe_image
 async def describe_image_hf(
     image: Image.Image,
     prompt_model: str,
-    hf_api_key: Optional[str] = None,
+    hf_api_key: str | None = None,
 ) -> str:
     headers = {"Authorization": f"Bearer {hf_api_key}"}
     api_url = f"https://api-inference.huggingface.co/models/{prompt_model}"
     png = image_to_png(image)
 
     async def post(
-        api_url: str, image: bytes, headers: Dict, wait_for_model: bool = True
+        api_url: str, image: bytes, headers: dict, wait_for_model: bool = True
     ) -> Any:
         async with aiohttp.ClientSession() as session:
-            payload: Dict[str, str] = {
+            payload: dict[str, str] = {
                 "inputs": {"image": base64.b64encode(image).decode("utf-8")},
                 "options": {"wait_for_model": wait_for_model},
             }
@@ -35,12 +38,13 @@ async def describe_image_hf(
         return inference
 
     inference = await post(api_url, png, headers=headers)
-    pattern = re.compile(r'^Level \d+: ')
+    pattern = re.compile(r"^Level \d+: ")
     description = inference[0].get("generated_text", "").strip()
-    return re.sub(pattern, '', description)
+    return re.sub(pattern, "", description)
+
 
 # 2. detect_humans
-def detect_humans_yolo(image: Image.Image) -> List[Tuple[int, int, int, int]]:
+def detect_humans_yolo(image: Image.Image) -> list[tuple[int, int, int, int]]:
     from ultralytics import YOLO
 
     boxes = []
@@ -59,7 +63,7 @@ def detect_humans_yolo(image: Image.Image) -> List[Tuple[int, int, int, int]]:
 
 
 # 3. detect_faces
-def detect_faces_dlib(image: Image.Image) -> Optional[Any]:
+def detect_faces_dlib(image: Image.Image) -> Any | None:
     import dlib
 
     face_detector = dlib.get_frontal_face_detector()
@@ -71,8 +75,8 @@ def detect_faces_dlib(image: Image.Image) -> Optional[Any]:
 async def inpaint_square_openai(
     image: Image.Image,
     prompt: str,
-    square_size: Tuple[int, int],
-    openai_api_key: Optional[str] = None,
+    square_size: tuple[int, int],
+    openai_api_key: str | None = None,
 ) -> Image.Image:
     openai.api_key = openai_api_key
     png = image_to_png(image)

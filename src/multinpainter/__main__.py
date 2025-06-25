@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 
 import asyncio
+
 import fire
-from multinpainter import __version__
+
 from .multinpainter import Multinpainter_OpenAI
-from typing import Optional
 
 
 def get_inpainter(*args, **kwargs) -> Multinpainter_OpenAI:
@@ -16,16 +16,17 @@ def inpaint(
     output: str,
     width: int,
     height: int,
-    prompt: Optional[str] = None,
-    fallback: Optional[str] = None,
-    step: Optional[int] = None,
+    prompt: str | None = None,
+    fallback: str | None = None,
+    step: int | None = None,
     square: int = 1024,
     humans: bool = False,
     verbose: bool = False,
-    openai_api_key: Optional[str] = None,
-    hf_api_key: Optional[str] = None,
+    openai_api_key: str | None = None,
+    hf_api_key: str | None = None,
     prompt_model: str = None,
-    *args, **kwargs,
+    *args,
+    **kwargs,
 ) -> str:
     """
     Perform iterative inpainting on an image file using OpenAI's DALL-E 2 model.
@@ -69,9 +70,10 @@ def inpaint(
 
 def describe(
     image: str,
-    hf_api_key: Optional[str] = None,
+    hf_api_key: str | None = None,
     prompt_model: str = None,
-    *args, **kwargs,
+    *args,
+    **kwargs,
 ) -> str:
     """
     Describe the image.

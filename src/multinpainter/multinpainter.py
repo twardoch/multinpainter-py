@@ -1,28 +1,19 @@
-import io
-import os
 import json
 import logging
+import os
+from collections import OrderedDict
 from datetime import datetime
 from pathlib import Path
-from collections import OrderedDict
-from typing import Optional, Union, Tuple, Dict, List, Any
-import base64
 
-import httpx
-import aiohttp
-import numpy as np
 import openai
-import requests
 from PIL import Image
 from tqdm import tqdm
-
-from multinpainter import __version__
-from .utils import image_to_png
 
 __author__ = "Adam Twardoch"
 __license__ = "Apache-2.0"
 
-DESCRPTION_MODEL="Salesforce/blip2-opt-2.7b"
+DESCRPTION_MODEL = "Salesforce/blip2-opt-2.7b"
+
 
 class Multinpainter_OpenAI:
     f"""
@@ -118,18 +109,18 @@ class Multinpainter_OpenAI:
 
     def __init__(
         self,
-        image_path: Union[str, Path],
-        out_path: Union[str, Path] = None,
+        image_path: str | Path,
+        out_path: str | Path = None,
         out_width: int = 0,
         out_height: int = 0,
-        prompt: Optional[str] = None,
-        fallback: Optional[str] = None,
-        step: Optional[int] = None,
+        prompt: str | None = None,
+        fallback: str | None = None,
+        step: int | None = None,
         square: int = 1024,
         humans: bool = True,
         verbose: bool = False,
-        openai_api_key: Optional[str] = None,
-        hf_api_key: Optional[str] = None,
+        openai_api_key: str | None = None,
+        hf_api_key: str | None = None,
         prompt_model: str = None,
     ):
         f"""
@@ -165,18 +156,22 @@ class Multinpainter_OpenAI:
         openai.openai_api_key = self.openai_api_key
         self.hf_api_key = hf_api_key or os.environ.get("HUGGINGFACEHUB_API_TOKEN", None)
         self.image_path = Path(image_path)
-        logging.info(f"Image path: {self.image_path}")        
+        logging.info(f"Image path: {self.image_path}")
         self.open_image()
         self.out_width = out_width
         self.out_height = out_height
         if not out_path:
-            out_path = self.image_path.with_name(f"{self.image_path.stem}_outpainted-{self.out_width}x{self.out_height}.png")
+            out_path = self.image_path.with_name(
+                f"{self.image_path.stem}_outpainted-{self.out_width}x{self.out_height}.png"
+            )
         self.out_path = Path(out_path)
         logging.info(f"Output path: {self.out_path}")
         logging.info(f"Output size: {self.out_width}x{self.out_height}")
         self.prompt = prompt
         self.fallback = fallback
-        self.prompt_model = prompt_model or DESCRPTION_MODEL # "Salesforce/blip2-opt-6.7b-coco" # 
+        self.prompt_model = (
+            prompt_model or DESCRPTION_MODEL
+        )  # "Salesforce/blip2-opt-6.7b-coco" #
         self.square = square
         self.step = step or square // 2
         self.center_of_focus = None
@@ -255,7 +250,6 @@ class Multinpainter_OpenAI:
 
         return image.convert("RGBA")
 
-
     def make_prompt_fallback(self):
         """
         Generates a non-human version of the prompt using the GPT-3.5-turbo model.
@@ -294,11 +288,13 @@ class Multinpainter_OpenAI:
     async def describe_image(self, func_describe=None, *args, **kwargs):
         if func_describe is None:
             from .models import describe_image_hf
+
             func_describe = describe_image_hf
 
         logging.info("Describing image...")
-        self.prompt = await func_describe(self.image, self.prompt_model, self.hf_api_key, *args, **kwargs)
-
+        self.prompt = await func_describe(
+            self.image, self.prompt_model, self.hf_api_key, *args, **kwargs
+        )
 
     def detect_humans(self, func_detect=None, *args, **kwargs):
         """
@@ -311,11 +307,11 @@ class Multinpainter_OpenAI:
         """
         if func_detect is None:
             from .models import detect_humans_yolov8
+
             func_detect = detect_humans_yolov8
 
         self.human_boxes = func_detect(self.image, *args, **kwargs)
         logging.info(f"Detected humans: {self.human_boxes}")
-
 
     def detect_faces(self, func_detect=None, *args, **kwargs):
         """
@@ -328,11 +324,11 @@ class Multinpainter_OpenAI:
         """
         if func_detect is None:
             from .models import detect_faces_dlib
+
             func_detect = detect_faces_dlib
 
         self.face_boxes = func_detect(self.image, *args, **kwargs)
         logging.info(f"Detected faces: {self.face_boxes}")
-
 
     def find_center_of_focus(self):
         """
@@ -382,7 +378,7 @@ class Multinpainter_OpenAI:
         y_init = max(0, self.expansion[2] - (self.square - self.input_height) // 2)
         return x_init, y_init
 
-    def human_in_square(self, square_box: Tuple[int, int, int, int]) -> bool:
+    def human_in_square(self, square_box: tuple[int, int, int, int]) -> bool:
         """
         Determines whether any detected human bounding boxes intersect with the given square_box.
 
@@ -400,7 +396,9 @@ class Multinpainter_OpenAI:
                 return True
         return False
 
-    async def inpaint_square(self, square_delta: Tuple[int, int], func_inpaint=None, *args, **kwargs) -> None:
+    async def inpaint_square(
+        self, square_delta: tuple[int, int], func_inpaint=None, *args, **kwargs
+    ) -> None:
         """
         Inpaints the square region in the output image specified by square_delta using OpenAI's API.
         Chooses the appropriate prompt based on the presence of humans in the square.
@@ -413,11 +411,17 @@ class Multinpainter_OpenAI:
         """
         if func_inpaint is None:
             from .models import inpaint_square_openai
+
             func_inpaint = inpaint_square_openai
 
         x, y = square_delta
         x1, y1 = x + self.square, y + self.square
-        if x >= self.expansion[0] and y >= self.expansion[2] and x1 <= self.expansion[0] + self.input_width and y1 <= self.expansion[2] + self.input_height:
+        if (
+            x >= self.expansion[0]
+            and y >= self.expansion[2]
+            and x1 <= self.expansion[0] + self.input_width
+            and y1 <= self.expansion[2] + self.input_height
+        ):
             return
 
         square = self.out_image.crop((x, y, x1, y1))
@@ -428,7 +432,14 @@ class Multinpainter_OpenAI:
             prompt = self.prompt_fallback
 
         logging.info(f"Inpainting region {x} {y} {x1} {y1} with: {prompt}")
-        inpainted_square = await func_inpaint(square, prompt, (self.square, self.square), self.openai_api_key, *args, **kwargs)
+        inpainted_square = await func_inpaint(
+            square,
+            prompt,
+            (self.square, self.square),
+            self.openai_api_key,
+            *args,
+            **kwargs,
+        )
         self.out_image.paste(inpainted_square, (x, y))
         self.snapshot()
 
@@ -491,8 +502,8 @@ class Multinpainter_OpenAI:
         return planned_squares
 
     def move_square(
-        self, square_delta: Tuple[int, int], direction: str
-    ) -> Tuple[int, int]:
+        self, square_delta: tuple[int, int], direction: str
+    ) -> tuple[int, int]:
         """
         Calculates the position of the square in a given direction.
 
