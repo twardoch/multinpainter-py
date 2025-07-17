@@ -14,8 +14,33 @@ If you don’t provide a prompt, Multinpainter will try to generate a prompt usi
 
 ## Installation
 
+### From PyPI (Recommended)
+
+```bash
+pip install multinpainter
 ```
-python3 -m pip install --upgrade git+https://github.com/twardoch/multinpainter-py
+
+### From Source
+
+```bash
+git clone https://github.com/twardoch/multinpainter-py
+cd multinpainter-py
+pip install -e .
+```
+
+### Pre-compiled Binaries
+
+Download the latest binaries from the [Releases](https://github.com/twardoch/multinpainter-py/releases) page:
+
+- **Linux**: `multinpainter-linux`
+- **Windows**: `multinpainter-windows.exe`
+- **macOS**: `multinpainter-macos`
+
+Make the binary executable and run:
+
+```bash
+chmod +x multinpainter-linux
+./multinpainter-linux input.png output.png 1920 1080 --prompt "your prompt"
 ```
 
 ## Usage
@@ -164,6 +189,84 @@ Here’s an explanation of the arguments:
 | `--prompt_model=PROMPT_MODEL` | `prompt_model`   | The Huggingface model to describe image. Defaults to `Salesforce/blip2-opt-2.7b`.                          |
 
 See docstrings inside the code for more detailed info.
+
+## Development
+
+### Setup Development Environment
+
+```bash
+# Clone the repository
+git clone https://github.com/twardoch/multinpainter-py
+cd multinpainter-py
+
+# Set up development environment
+make setup
+# or
+./scripts/dev-setup.sh
+
+# Activate virtual environment
+source venv/bin/activate
+```
+
+### Running Tests
+
+```bash
+# Run all tests
+make test
+# or
+./scripts/test.sh
+
+# Run specific test file
+python -m pytest tests/test_multinpainter.py -v
+```
+
+### Building
+
+```bash
+# Build package
+make build
+# or
+./scripts/build.sh
+
+# Build binary
+make build-binary
+```
+
+### Release Process
+
+```bash
+# Create a new release
+make release VERSION=1.2.3
+# or
+./scripts/release.sh 1.2.3
+```
+
+This will:
+1. Run tests to ensure everything works
+2. Build the package
+3. Create and push a git tag
+4. Trigger GitHub Actions to create binaries and publish to PyPI
+
+### Available Make Commands
+
+- `make setup` - Set up development environment
+- `make test` - Run tests
+- `make build` - Build the package
+- `make clean` - Clean build artifacts
+- `make release VERSION=x.y.z` - Create a release
+- `make lint` - Run linting
+- `make format` - Format code
+- `make dev-install` - Install in development mode
+
+## CI/CD Pipeline
+
+The project uses GitHub Actions for continuous integration and deployment:
+
+- **Tests**: Run on Python 3.8-3.12 across Linux, Windows, and macOS
+- **Linting**: Black, flake8, and mypy checks
+- **Building**: Automatic package building
+- **Binary Creation**: Cross-platform binary compilation with PyInstaller
+- **Release**: Automatic PyPI publishing and GitHub releases on git tags
 
 ## Authors & License
 
