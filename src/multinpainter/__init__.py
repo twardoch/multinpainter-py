@@ -17,6 +17,12 @@ except PackageNotFoundError:  # pragma: no cover
 finally:
     del version, PackageNotFoundError
 
+# Try to read from setuptools_scm generated version file
+try:
+    from ._version import __version__
+except ImportError:
+    pass
+
 from .multinpainter import DESCRPTION_MODEL, Multinpainter_OpenAI
 
 __all__ = ["Multinpainter_OpenAI", "DESCRPTION_MODEL"]
