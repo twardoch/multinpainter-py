@@ -56,6 +56,9 @@ Currently mixing async and sync patterns causes complexity. We should:
 - Reduce method complexity by breaking down large methods
 - Implement proper type hints throughout
 
+#### 1.5 Code Splitting and Modularization
+- Completed: `multinpainter.py` has been split into smaller, more focused modules (`image_utils.py`, `prompt_utils.py`, `detection_utils.py`, `inpainting_core.py`, and `core.py`). Refer to `REFACTOR_SPLITTING.md` for details.
+
 ### 2. Testing and Quality Assurance
 
 #### 2.1 Unit Testing

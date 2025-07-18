@@ -4,7 +4,7 @@ import asyncio
 
 import fire
 
-from .multinpainter import Multinpainter_OpenAI
+from .core import Multinpainter_OpenAI
 
 
 def get_inpainter(*args, **kwargs) -> Multinpainter_OpenAI:

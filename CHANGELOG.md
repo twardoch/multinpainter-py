@@ -2,6 +2,11 @@
 
 ## Recent Changes (as of 2025-06-29)
 
+- Refactored `multinpainter.py` into smaller, more modular files (`image_utils.py`, `prompt_utils.py`, `detection_utils.py`, `inpainting_core.py`, and `core.py`).
+- Updated imports and docstrings to reflect the new module structure.
+- Fixed "Homan prompt" typo in `core.py`.
+- Confirmed correct naming of `detect_humans_yolo` in `models.py`.
+
 - Auto-commit: Save local changes
 - Removed requirements.txt file
 - Updated multinpainter.py

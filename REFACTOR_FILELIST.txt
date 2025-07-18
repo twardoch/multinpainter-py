@@ -1,0 +1,11 @@
+84	./llms.txt
+26	./src/multinpainter/multinpainter.py
+11	./LICENSE.txt
+10	./docs/conf.py
+7	./README.md
+7	./PLAN.md
+4	./setup.cfg
+4	./src/multinpainter/__main__.py
+3	./TODO.md
+3	./tox.ini
+3	./src/multinpainter/models.py

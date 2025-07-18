@@ -1,9 +1,10 @@
 # TODO List for Multinpainter
 
 ## Critical Fixes
-- [ ] Fix typo in multinpainter.py: "Homan prompt" → "Human prompt" (line 2342)
-- [ ] Fix import name: `detect_humans_yolov8` → `detect_humans_yolo` in models.py
+- [x] Fix typo in multinpainter.py: "Homan prompt" → "Human prompt" (line 2342)
+- [x] Fix import name: `detect_humans_yolov8` → `detect_humans_yolo` in models.py
 - [ ] Add missing error handling for API calls
+- [ ] Fix async/sync pattern inconsistencies
 - [ ] Fix async/sync pattern inconsistencies
 
 ## Testing
@@ -22,6 +23,17 @@
 - [ ] Implement proper logging configuration
 - [ ] Add input validation for all public methods
 - [ ] Refactor large methods into smaller, focused functions
+
+## Code Splitting
+- [x] Create `image_utils.py` and move relevant functions from `multinpainter.py`
+- [x] Create `prompt_utils.py` and move relevant functions from `multinpainter.py`
+- [x] Create `detection_utils.py` and move relevant functions from `multinpainter.py`
+- [x] Create `inpainting_core.py` and move relevant functions from `multinpainter.py`
+- [x] Update `Multinpainter_OpenAI` class to use functions from new modules
+- [x] Rename `multinpainter.py` to `core.py`
+- [x] Update `__init__.py` and `__main__.py` imports to reflect `core.py`
+- [ ] Write new unit tests for `image_utils.py`, `prompt_utils.py`, `detection_utils.py`, and `inpainting_core.py`
+- [x] Update docstrings and documentation to reflect new module structure
 
 ## Configuration and Settings
 - [ ] Create configuration class using Pydantic
